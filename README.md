@@ -1,5 +1,11 @@
 # AcklenAvenue.Polling
 
+## Installation:
+
+```
+install-package AcklenAvenue.Polling
+```
+
 ## Example usage:
 ```
 public class SampleQueueWorker
