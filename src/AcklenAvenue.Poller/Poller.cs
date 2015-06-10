@@ -1,113 +1,124 @@
 ﻿using System;
-using System.Threading;
-using log4net;
+
+using Autofac;
+using Autofac.Extras.Quartz;
+
+using Common.Logging;
+
+using Quartz;
+using Quartz.Spi;
+
+using Topshelf;
+using Topshelf.Autofac;
+using Topshelf.HostConfigurators;
+using Topshelf.Quartz;
+using Topshelf.ServiceConfigurators;
 
 namespace AcklenAvenue.Poller
 {
-    public class Poller
+    public class Poller : IPoller
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(Poller));
+        readonly TaskAdapter _concreteTask;
 
-        private readonly Action _action;
-        private readonly int _pollingInterval;
-        private readonly Thread _processingThread;
-        private readonly AutoResetEvent _stopEvent;
-        private readonly ManualResetEventSlim _pauseEvent;
-        private readonly object _syncLock = new object();
-        private PollerState _pollerState;
+        readonly Action<ContainerBuilder> _containerConfiguration;
 
-        public Poller(string pollerName, Action action, int pollingInterval, bool isBackground)
+        readonly ILog _log = LogManager.GetLogger(typeof(Job));
+
+        readonly Action<HostConfigurator> _overidedServiceConfiguration;
+
+        readonly string _serviceDescription;
+
+        readonly string _serviceDisplayName;
+
+        readonly string _serviceName;
+
+        IContainer _container;
+
+        public Poller(
+            TaskAdapter concreteTask,
+            Action<ContainerBuilder> containerConfiguration,
+            Action<HostConfigurator> overidedServiceConfiguration,
+            string serviceDescription,
+            string serviceDisplayName,
+            string serviceName)
         {
-            _action = action;
-            _pollingInterval = pollingInterval;
-
-            _stopEvent = new AutoResetEvent(false);
-            _pauseEvent = new ManualResetEventSlim(false);
-            _processingThread = new Thread(DoWork) { IsBackground = isBackground, Name = pollerName };
-
-            _pollerState = PollerState.Unstarted;
+            _concreteTask = concreteTask;
+            _containerConfiguration = containerConfiguration;
+            _overidedServiceConfiguration = overidedServiceConfiguration;
+            _serviceDescription = serviceDescription;
+            _serviceDisplayName = serviceDisplayName;
+            _serviceName = serviceName;
         }
 
         public void Start()
         {
-            _pollerState = PollerState.Running;
-            _processingThread.Start();
-        }
-
-        public void Start(int dueTime)
-        {
-            new Timer(o => Start(), null, dueTime, Timeout.Infinite);
-        }
-
-        public void Stop()
-        {
-            lock (_syncLock)
-            {
-                if (_pollerState != PollerState.Running && _pollerState != PollerState.PauseRequested)
-                    Log.WarnFormat("Requested STOP on {0} poller state.", _pollerState);
-
-                _pollerState = PollerState.StopRequested;
-                _stopEvent.Set();
-                _pauseEvent.Set();
-            }
-        }
-
-        public void Pause()
-        {
-            lock (_syncLock)
-            {
-                if (_pollerState != PollerState.Running)
-                    Log.WarnFormat("Requested PAUSE on {0} poller state.", _pollerState);
-
-                _pauseEvent.Reset();
-                _pollerState = PollerState.PauseRequested;
-            }
-        }
-
-        public void Continue()
-        {
-            lock (_syncLock)
-            {
-                if (_pollerState == PollerState.PauseRequested)
-                    _pollerState = PollerState.Running; // applicable if job is long running or no new poll was needed since pause requested
-                else if (_pollerState != PollerState.Paused)
-                    Log.WarnFormat("Requested CONTINUE on {0} poller state.", _pollerState);
-                _pauseEvent.Set();
-            }
-        }
-
-        private void DoWork()
-        {
-            while (_pollerState == PollerState.Running)
-            {
-                try
-                {
-                    Console.WriteLine("polling");
-                    _action();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(Thread.CurrentThread.Name + "failed.", ex);
-                }
-                finally
-                {
-                    if (_stopEvent.WaitOne(_pollingInterval))
+            _container = ConfiguraContainer().Build();
+            HostFactory.Run(
+                x =>
                     {
-                        if (_pollerState == PollerState.StopRequested)
-                            _pollerState = PollerState.Stopped;
-                    }
+                        x.RunAsLocalService();
 
-                    if (_pollerState == PollerState.PauseRequested)
+                        _overidedServiceConfiguration(x);
+
+                        x.UseAutofacContainer(_container);
+                        x.Service<JobsManager>(
+                            s =>
+                                {
+                                    s.ConstructUsingAutofacContainer();
+                                    s.WhenStarted(tc => tc.Start());
+                                    s.WhenStopped(
+                                        tc =>
+                                            {
+                                                tc.Stop();
+                                                _container.Dispose();
+                                            });
+
+                                    ConfigureBackgroundJobs(s);
+                                });
+
+                        x.SetDescription(_serviceDescription);
+                        x.SetDisplayName(_serviceDisplayName);
+                        x.SetServiceName(_serviceName);
+                        x.UseLog4Net();
+                    });
+        }
+
+        public void ConfigureBackgroundJobs(ServiceConfigurator<JobsManager> svc)
+        {
+            svc.UsingQuartzJobFactory(() => _container.Resolve<IJobFactory>());
+            svc.ScheduleQuartzJob(
+                q =>
                     {
-                        _pollerState = PollerState.Paused;
-                        _pauseEvent.Wait();
-                        // Continue only if we are still in Pause mode and not StopRequested
-                        if (_pollerState == PollerState.Paused)
-                            _pollerState = PollerState.Running;
-                    }
-                }
-            }
-            Log.Debug("Exiting: " + Thread.CurrentThread.Name);
+                        q.WithJob(
+                            JobBuilder.Create<Job>()
+                                      .WithIdentity(_concreteTask.TaskName)
+                                      .WithDescription(_concreteTask.TaskDescription)
+                                      .Build);
+                        q.AddTrigger(
+                            () =>
+                            TriggerBuilder.Create()
+                                          .WithSchedule(
+                                              SimpleScheduleBuilder.RepeatSecondlyForever(
+                                                  _concreteTask.IntervalInSeconds))
+                                          .Build());
+                    });
+        }
+
+        ContainerBuilder ConfiguraContainer()
+        {
+            var cb = new ContainerBuilder();
+            cb.RegisterModule(new QuartzAutofacFactoryModule());
+
+            cb.Register(context => new Job(context.ResolveNamed<ITask>(_concreteTask.TaskName)))
+             .AsSelf()
+              .InstancePerLifetimeScope();
+
+            cb.RegisterType<JobsManager>().AsSelf();
+
+            cb.RegisterType(_concreteTask.Type).Named<ITask>(_concreteTask.TaskName);
+            _containerConfiguration(cb);
+
+            return cb;
         }
     }
 }

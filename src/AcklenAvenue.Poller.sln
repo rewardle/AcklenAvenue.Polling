@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.30501.0
-MinimumVisualStudioVersion = 10.0.40219.1
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AcklenAvenue.Poller", "AcklenAvenue.Poller\AcklenAvenue.Poller.csproj", "{2E7B1E82-B781-49D0-81C5-55FB7BC257DD}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleServices", "SampleServices\SampleServices.csproj", "{AB179F0A-DEAE-4BE6-9295-E2EBB11D88C5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +15,10 @@ Global
 		{2E7B1E82-B781-49D0-81C5-55FB7BC257DD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2E7B1E82-B781-49D0-81C5-55FB7BC257DD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2E7B1E82-B781-49D0-81C5-55FB7BC257DD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AB179F0A-DEAE-4BE6-9295-E2EBB11D88C5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AB179F0A-DEAE-4BE6-9295-E2EBB11D88C5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AB179F0A-DEAE-4BE6-9295-E2EBB11D88C5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AB179F0A-DEAE-4BE6-9295-E2EBB11D88C5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
