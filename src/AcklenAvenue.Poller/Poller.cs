@@ -16,19 +16,50 @@ using Topshelf.ServiceConfigurators;
 
 namespace AcklenAvenue.Poller
 {
-    class Program
+    public class Poller : IPoller
     {
-        static IContainer _container;
+        readonly TaskAdapter _concreteTask;
 
-        static readonly ILog s_log = LogManager.GetLogger(typeof(Program));
+        readonly Action<ContainerBuilder> _containerConfiguration;
 
-        static void Main(string[] args)
+        readonly ILog _log = LogManager.GetLogger(typeof(Job));
+
+        readonly Action<HostConfigurator> _overidedServiceConfiguration;
+
+        readonly string _serviceDescription;
+
+        readonly string _serviceDisplayName;
+
+        readonly string _serviceName;
+
+        IContainer _container;
+
+        public Poller(
+            TaskAdapter concreteTask,
+            Action<ContainerBuilder> containerConfiguration,
+            Action<HostConfigurator> overidedServiceConfiguration,
+            string serviceDescription,
+            string serviceDisplayName,
+            string serviceName)
         {
-            _container = ConfigureContainer(new ContainerBuilder()).Build();
+            _concreteTask = concreteTask;
+            _containerConfiguration = containerConfiguration;
+            _overidedServiceConfiguration = overidedServiceConfiguration;
+            _serviceDescription = serviceDescription;
+            _serviceDisplayName = serviceDisplayName;
+            _serviceName = serviceName;
+        }
 
+        public void Start()
+        {
+            _container = ConfiguraContainer().Build();
             HostFactory.Run(
                 x =>
                     {
+                        x.RunAsLocalService();
+
+                        _overidedServiceConfiguration(x);
+
                         x.UseAutofacContainer(_container);
                         x.Service<JobsManager>(
                             s =>
@@ -41,140 +72,53 @@ namespace AcklenAvenue.Poller
                                                 tc.Stop();
                                                 _container.Dispose();
                                             });
+
                                     ConfigureBackgroundJobs(s);
                                 });
 
-                        x.RunAsLocalSystem();
-
-                        x.SetDescription("Rewardle's Points Commands Service");
-                        x.SetDisplayName("PointsCommands");
-                        x.SetServiceName("PointsCommands");
+                        x.SetDescription(_serviceDescription);
+                        x.SetDisplayName(_serviceDisplayName);
+                        x.SetServiceName(_serviceName);
+                        x.UseLog4Net();
                     });
         }
 
-        static void ConfigureBackgroundJobs(ServiceConfigurator<JobsManager> svc)
+        public void ConfigureBackgroundJobs(ServiceConfigurator<JobsManager> svc)
         {
             svc.UsingQuartzJobFactory(() => _container.Resolve<IJobFactory>());
             svc.ScheduleQuartzJob(
                 q =>
                     {
                         q.WithJob(
-                            JobBuilder.Create().OfType()
-                        //.WithIdentity("CommandsHandler", "Commands").Build);
+                            JobBuilder.Create<Job>()
+                                      .WithIdentity(_concreteTask.TaskName)
+                                      .WithDescription(_concreteTask.TaskDescription)
+                                      .Build);
                         q.AddTrigger(
                             () =>
-                            TriggerBuilder.Create().WithSchedule(SimpleScheduleBuilder.RepeatSecondlyForever(2)).Build());
+                            TriggerBuilder.Create()
+                                          .WithSchedule(
+                                              SimpleScheduleBuilder.RepeatSecondlyForever(
+                                                  _concreteTask.IntervalInSeconds))
+                                          .Build());
                     });
         }
 
-        internal static ContainerBuilder ConfigureContainer(ContainerBuilder cb)
+        ContainerBuilder ConfiguraContainer()
         {
+            var cb = new ContainerBuilder();
             cb.RegisterModule(new QuartzAutofacFactoryModule());
-            cb.RegisterModule(new QuartzAutofacJobsModule(typeof(CommandHandlerJob).Assembly));
 
-            RegisterComponents(cb);
-            return cb;
-        }
+            cb.Register(context => new Job(context.ResolveNamed<ITask>(_concreteTask.TaskName)))
+             .AsSelf()
+              .InstancePerLifetimeScope();
 
-        internal static void RegisterComponents(ContainerBuilder cb)
-        {
             cb.RegisterType<JobsManager>().AsSelf();
-            RunBootstrapperTasks(cb);
-        }
 
-        static void RunBootstrapperTasks(ContainerBuilder builder)
-        {
-        }
-    }
+            cb.RegisterType(_concreteTask.Type).Named<ITask>(_concreteTask.TaskName);
+            _containerConfiguration(cb);
 
-    public class JobsManager
-    {
-        public void Start()
-        {
-        }
-
-        public void Stop()
-        {
-        }
-    }
-
-    public class PollerBuilder
-    {
-        const string Default = "Default";
-
-        public PollerBuilder()
-        {
-            ServiceDescription = Default;
-            ServiceDisplayName = Default;
-            ServiceName = Default;
-            OveridedServiceConfiguration = x => { };
-            ContainerConfiguration = builder => { };
-        }
-
-        protected string ServiceDescription { get; set; }
-
-        protected string ServiceDisplayName { get; set; }
-
-        protected string ServiceName { get; set; }
-
-        protected Action<HostConfigurator> OveridedServiceConfiguration { get; set; }
-
-        protected TaskAdapter ConcreteTask { get; set; }
-
-        protected Action<ContainerBuilder> ContainerConfiguration { get; set; }
-
-        public PollerBuilder SetDescription(string serviceDescription)
-        {
-            ServiceDescription = serviceDescription;
-            return this;
-        }
-
-        public PollerBuilder SetDisplayName(string serviceDisplayName)
-        {
-            ServiceDisplayName = serviceDisplayName;
-            return this;
-        }
-
-        public PollerBuilder SetServiceName(string serviceName)
-        {
-            ServiceName = serviceName;
-            return this;
-        }
-
-        public PollerBuilder OverideServiceConfiguration(Action<HostConfigurator> overideConfiguration)
-        {
-            OveridedServiceConfiguration = overideConfiguration;
-            return this;
-        }
-
-        public PollerBuilder WitTask<TTask>(string taskName, string taskDescription, int intervalInSeconds)
-            where TTask : class, ITask
-        {
-            ConcreteTask = new TaskAdapter(typeof(TTask), taskName, taskDescription, intervalInSeconds);
-            return this;
-        }
-
-        public PollerBuilder ConfigureContainer(Action<ContainerBuilder> containerConfiguration)
-        {
-            ContainerConfiguration = containerConfiguration;
-            return this;
-        }
-
-        public IPoller Build()
-        {
-            return new Poller();
-        }
-    }
-
-    public interface IPoller
-    {
-        void Start();
-    }
-
-    public class Poller : IPoller
-    {
-        public void Start()
-        {
+            return cb;
         }
     }
 }
