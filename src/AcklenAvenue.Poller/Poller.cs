@@ -1,113 +1,180 @@
 ﻿using System;
-using System.Threading;
-using log4net;
+
+using Autofac;
+using Autofac.Extras.Quartz;
+
+using Common.Logging;
+
+using Quartz;
+using Quartz.Spi;
+
+using Topshelf;
+using Topshelf.Autofac;
+using Topshelf.HostConfigurators;
+using Topshelf.Quartz;
+using Topshelf.ServiceConfigurators;
 
 namespace AcklenAvenue.Poller
 {
-    public class Poller
+    class Program
     {
-        private static readonly ILog Log = LogManager.GetLogger(typeof(Poller));
+        static IContainer _container;
 
-        private readonly Action _action;
-        private readonly int _pollingInterval;
-        private readonly Thread _processingThread;
-        private readonly AutoResetEvent _stopEvent;
-        private readonly ManualResetEventSlim _pauseEvent;
-        private readonly object _syncLock = new object();
-        private PollerState _pollerState;
+        static readonly ILog s_log = LogManager.GetLogger(typeof(Program));
 
-        public Poller(string pollerName, Action action, int pollingInterval, bool isBackground)
+        static void Main(string[] args)
         {
-            _action = action;
-            _pollingInterval = pollingInterval;
+            _container = ConfigureContainer(new ContainerBuilder()).Build();
 
-            _stopEvent = new AutoResetEvent(false);
-            _pauseEvent = new ManualResetEventSlim(false);
-            _processingThread = new Thread(DoWork) { IsBackground = isBackground, Name = pollerName };
+            HostFactory.Run(
+                x =>
+                    {
+                        x.UseAutofacContainer(_container);
+                        x.Service<JobsManager>(
+                            s =>
+                                {
+                                    s.ConstructUsingAutofacContainer();
+                                    s.WhenStarted(tc => tc.Start());
+                                    s.WhenStopped(
+                                        tc =>
+                                            {
+                                                tc.Stop();
+                                                _container.Dispose();
+                                            });
+                                    ConfigureBackgroundJobs(s);
+                                });
 
-            _pollerState = PollerState.Unstarted;
+                        x.RunAsLocalSystem();
+
+                        x.SetDescription("Rewardle's Points Commands Service");
+                        x.SetDisplayName("PointsCommands");
+                        x.SetServiceName("PointsCommands");
+                    });
         }
 
+        static void ConfigureBackgroundJobs(ServiceConfigurator<JobsManager> svc)
+        {
+            svc.UsingQuartzJobFactory(() => _container.Resolve<IJobFactory>());
+            svc.ScheduleQuartzJob(
+                q =>
+                    {
+                        q.WithJob(
+                            JobBuilder.Create().OfType()
+                        //.WithIdentity("CommandsHandler", "Commands").Build);
+                        q.AddTrigger(
+                            () =>
+                            TriggerBuilder.Create().WithSchedule(SimpleScheduleBuilder.RepeatSecondlyForever(2)).Build());
+                    });
+        }
+
+        internal static ContainerBuilder ConfigureContainer(ContainerBuilder cb)
+        {
+            cb.RegisterModule(new QuartzAutofacFactoryModule());
+            cb.RegisterModule(new QuartzAutofacJobsModule(typeof(CommandHandlerJob).Assembly));
+
+            RegisterComponents(cb);
+            return cb;
+        }
+
+        internal static void RegisterComponents(ContainerBuilder cb)
+        {
+            cb.RegisterType<JobsManager>().AsSelf();
+            RunBootstrapperTasks(cb);
+        }
+
+        static void RunBootstrapperTasks(ContainerBuilder builder)
+        {
+        }
+    }
+
+    public class JobsManager
+    {
         public void Start()
         {
-            _pollerState = PollerState.Running;
-            _processingThread.Start();
-        }
-
-        public void Start(int dueTime)
-        {
-            new Timer(o => Start(), null, dueTime, Timeout.Infinite);
         }
 
         public void Stop()
         {
-            lock (_syncLock)
-            {
-                if (_pollerState != PollerState.Running && _pollerState != PollerState.PauseRequested)
-                    Log.WarnFormat("Requested STOP on {0} poller state.", _pollerState);
+        }
+    }
 
-                _pollerState = PollerState.StopRequested;
-                _stopEvent.Set();
-                _pauseEvent.Set();
-            }
+    public class PollerBuilder
+    {
+        const string Default = "Default";
+
+        public PollerBuilder()
+        {
+            ServiceDescription = Default;
+            ServiceDisplayName = Default;
+            ServiceName = Default;
+            OveridedServiceConfiguration = x => { };
+            ContainerConfiguration = builder => { };
         }
 
-        public void Pause()
-        {
-            lock (_syncLock)
-            {
-                if (_pollerState != PollerState.Running)
-                    Log.WarnFormat("Requested PAUSE on {0} poller state.", _pollerState);
+        protected string ServiceDescription { get; set; }
 
-                _pauseEvent.Reset();
-                _pollerState = PollerState.PauseRequested;
-            }
+        protected string ServiceDisplayName { get; set; }
+
+        protected string ServiceName { get; set; }
+
+        protected Action<HostConfigurator> OveridedServiceConfiguration { get; set; }
+
+        protected TaskAdapter ConcreteTask { get; set; }
+
+        protected Action<ContainerBuilder> ContainerConfiguration { get; set; }
+
+        public PollerBuilder SetDescription(string serviceDescription)
+        {
+            ServiceDescription = serviceDescription;
+            return this;
         }
 
-        public void Continue()
+        public PollerBuilder SetDisplayName(string serviceDisplayName)
         {
-            lock (_syncLock)
-            {
-                if (_pollerState == PollerState.PauseRequested)
-                    _pollerState = PollerState.Running; // applicable if job is long running or no new poll was needed since pause requested
-                else if (_pollerState != PollerState.Paused)
-                    Log.WarnFormat("Requested CONTINUE on {0} poller state.", _pollerState);
-                _pauseEvent.Set();
-            }
+            ServiceDisplayName = serviceDisplayName;
+            return this;
         }
 
-        private void DoWork()
+        public PollerBuilder SetServiceName(string serviceName)
         {
-            while (_pollerState == PollerState.Running)
-            {
-                try
-                {
-                    Console.WriteLine("polling");
-                    _action();
-                }
-                catch (Exception ex)
-                {
-                    Log.Error(Thread.CurrentThread.Name + "failed.", ex);
-                }
-                finally
-                {
-                    if (_stopEvent.WaitOne(_pollingInterval))
-                    {
-                        if (_pollerState == PollerState.StopRequested)
-                            _pollerState = PollerState.Stopped;
-                    }
+            ServiceName = serviceName;
+            return this;
+        }
 
-                    if (_pollerState == PollerState.PauseRequested)
-                    {
-                        _pollerState = PollerState.Paused;
-                        _pauseEvent.Wait();
-                        // Continue only if we are still in Pause mode and not StopRequested
-                        if (_pollerState == PollerState.Paused)
-                            _pollerState = PollerState.Running;
-                    }
-                }
-            }
-            Log.Debug("Exiting: " + Thread.CurrentThread.Name);
+        public PollerBuilder OverideServiceConfiguration(Action<HostConfigurator> overideConfiguration)
+        {
+            OveridedServiceConfiguration = overideConfiguration;
+            return this;
+        }
+
+        public PollerBuilder WitTask<TTask>(string taskName, string taskDescription, int intervalInSeconds)
+            where TTask : class, ITask
+        {
+            ConcreteTask = new TaskAdapter(typeof(TTask), taskName, taskDescription, intervalInSeconds);
+            return this;
+        }
+
+        public PollerBuilder ConfigureContainer(Action<ContainerBuilder> containerConfiguration)
+        {
+            ContainerConfiguration = containerConfiguration;
+            return this;
+        }
+
+        public IPoller Build()
+        {
+            return new Poller();
+        }
+    }
+
+    public interface IPoller
+    {
+        void Start();
+    }
+
+    public class Poller : IPoller
+    {
+        public void Start()
+        {
         }
     }
 }
