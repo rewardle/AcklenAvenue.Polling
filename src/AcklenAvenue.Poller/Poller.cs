@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 
 using Autofac;
 using Autofac.Extras.Quartz;
@@ -18,7 +19,7 @@ namespace AcklenAvenue.Poller
 {
     public class Poller : IPoller
     {
-        readonly TaskAdapter _concreteTask;
+        readonly Dictionary<string, TaskAdapter> _concreteTask;
 
         readonly Action<ContainerBuilder> _containerConfiguration;
 
@@ -35,7 +36,7 @@ namespace AcklenAvenue.Poller
         IContainer _container;
 
         public Poller(
-            TaskAdapter concreteTask,
+            Dictionary<string, TaskAdapter> concreteTask,
             Action<ContainerBuilder> containerConfiguration,
             Action<HostConfigurator> overidedServiceConfiguration,
             string serviceDescription,
@@ -52,7 +53,7 @@ namespace AcklenAvenue.Poller
 
         public void Start()
         {
-            _container = ConfiguraContainer().Build();
+            _container = ConfigureContainer().Build();
             HostFactory.Run(
                 x =>
                     {
@@ -85,38 +86,50 @@ namespace AcklenAvenue.Poller
 
         public void ConfigureBackgroundJobs(ServiceConfigurator<JobsManager> svc)
         {
-            svc.UsingQuartzJobFactory(() => _container.Resolve<IJobFactory>());
-            svc.ScheduleQuartzJob(
-                q =>
-                    {
-                        q.WithJob(
-                            JobBuilder.Create<Job>()
-                                      .WithIdentity(_concreteTask.TaskName)
-                                      .WithDescription(_concreteTask.TaskDescription)
-                                      .Build);
-                        q.AddTrigger(
-                            () =>
-                            TriggerBuilder.Create()
-                                          .WithSchedule(
-                                              SimpleScheduleBuilder.RepeatSecondlyForever(
-                                                  _concreteTask.IntervalInSeconds))
-                                          .Build());
-                    });
+            svc.UsingQuartzJobFactory(() => _container.Resolve<PollerAutofacJobFactory>());
+
+            foreach (var taskAdapter in _concreteTask)
+            {
+                string name = taskAdapter.Key;
+                TaskAdapter adapter = taskAdapter.Value;
+                string taskDescription = adapter.TaskDescription;
+                svc.ScheduleQuartzJob(
+                    q =>
+                        {
+                            q.WithJob(
+                                JobBuilder.Create<Job>().WithIdentity(name).WithDescription(taskDescription).Build);
+                            q.AddTrigger(
+                                () =>
+                                TriggerBuilder.Create()
+                                              .WithSchedule(
+                                                  SimpleScheduleBuilder.RepeatSecondlyForever(adapter.IntervalInSeconds))
+                                              .Build());
+                        });
+            }
         }
 
-        ContainerBuilder ConfiguraContainer()
+        ContainerBuilder ConfigureContainer()
         {
             var cb = new ContainerBuilder();
             cb.RegisterModule(new QuartzAutofacFactoryModule());
+            cb.Register(c => new PollerAutofacJobFactory(c.Resolve<ILifetimeScope>(), "Poller.Job"))
+              .AsSelf()
+              .As<IJobFactory>()
+              .SingleInstance();
 
-            cb.Register(context => new Job(context.ResolveNamed<ITask>(_concreteTask.TaskName)))
-             .AsSelf()
-              .InstancePerLifetimeScope();
-
-            cb.RegisterType<JobsManager>().AsSelf();
-
-            cb.RegisterType(_concreteTask.Type).Named<ITask>(_concreteTask.TaskName);
             _containerConfiguration(cb);
+            cb.RegisterType<JobsManager>().AsSelf();
+            foreach (var taskAdapter in _concreteTask)
+            {
+                TaskAdapter task = taskAdapter.Value;
+
+                cb.RegisterType(task.Type).Named<ITask>(task.TaskName);
+
+                cb.Register(context => new Job(context.ResolveNamed<ITask>(task.TaskName)))
+                  .Named<Job>(task.TaskName)
+                  .AsSelf()
+                  .InstancePerLifetimeScope();
+            }
 
             return cb;
         }
