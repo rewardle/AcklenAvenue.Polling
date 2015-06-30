@@ -26,7 +26,6 @@ namespace AcklenAvenue.Poller
             catch (Exception ex)
             {
                 throw new JobExecutionException("Something awful happened", ex, false);
-                ;
             }
         }
     }

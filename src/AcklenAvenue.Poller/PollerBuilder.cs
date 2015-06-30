@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 
 using Autofac;
 
@@ -12,6 +14,7 @@ namespace AcklenAvenue.Poller
 
         public PollerBuilder()
         {
+            ConcreteTasks = new Dictionary<string, TaskAdapter>();
             ServiceDescription = Default;
             ServiceDisplayName = Default;
             ServiceName = Default;
@@ -27,7 +30,7 @@ namespace AcklenAvenue.Poller
 
         protected Action<HostConfigurator> OveridedServiceConfiguration { get; set; }
 
-        protected TaskAdapter ConcreteTask { get; set; }
+        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; set; }
 
         protected Action<ContainerBuilder> ContainerConfiguration { get; set; }
 
@@ -58,7 +61,15 @@ namespace AcklenAvenue.Poller
         public PollerBuilder WithTask<TTask>(string taskName, string taskDescription, int intervalInSeconds)
             where TTask : class, ITask
         {
-            ConcreteTask = new TaskAdapter(typeof(TTask), taskName, taskDescription, intervalInSeconds);
+            if (ConcreteTasks.Keys.All(s => s != taskName))
+            {
+                ConcreteTasks.Add(
+                    taskName, new TaskAdapter(typeof(TTask), taskName, taskDescription, intervalInSeconds));
+            }
+            else
+            {
+                throw new Exception(string.Format("The task {0} has already registered", taskName));
+            }
             return this;
         }
 
@@ -71,7 +82,7 @@ namespace AcklenAvenue.Poller
         public IPoller Build()
         {
             return new Poller(
-                ConcreteTask,
+                ConcreteTasks,
                 ContainerConfiguration,
                 OveridedServiceConfiguration,
                 ServiceDescription,

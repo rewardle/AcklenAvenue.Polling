@@ -17,7 +17,8 @@ namespace SampleServices
              .SetServiceName("PointsCommands")
              .OverideServiceConfiguration(d => d.RunAsLocalService())
              .RegisterComponents(builder => builder.RegisterType<FakeServie>().As<IFakeService>())
-             .WithTask<ExampleTask>("ExampleName", "Description", 2)
+             .WithTask<ExampleTask>("HOla", "Description", 2)
+             .WithTask<OtherTask>("dd", "Description", 4)
              .Build()
              .Start();
         }
@@ -31,6 +32,20 @@ namespace SampleServices
     {
     }
 
+    public class OtherTask : ITask
+    {
+        readonly IFakeService _fakeService;
+
+        public OtherTask(IFakeService fakeService)
+        {
+            _fakeService = fakeService;
+        }
+
+        public void Execute()
+        {
+        }
+    }
+
     public class ExampleTask : ITask
     {
         readonly IFakeService _fakeService;
@@ -39,7 +54,7 @@ namespace SampleServices
         {
             _fakeService = fakeService;
         }
-        
+
         public void Execute()
         {
         }

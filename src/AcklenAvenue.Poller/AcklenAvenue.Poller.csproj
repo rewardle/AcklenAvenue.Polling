@@ -86,6 +86,7 @@
     <Compile Include="ITask.cs" />
     <Compile Include="Job.cs" />
     <Compile Include="JobsManager.cs" />
+    <Compile Include="PollerAutofacJobFactory.cs" />
     <Compile Include="Poller.cs" />
     <Compile Include="PollerBuilder.cs" />
     <Compile Include="PollerState.cs" />
