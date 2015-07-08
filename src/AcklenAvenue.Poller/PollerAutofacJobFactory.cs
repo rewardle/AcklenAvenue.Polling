@@ -1,16 +1,19 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Globalization;
 using Autofac;
+
 using Quartz;
 using Quartz.Spi;
+
+using log4net;
 
 namespace AcklenAvenue.Poller
 {
     public class PollerAutofacJobFactory : IJobFactory, IDisposable
     {
-        readonly ILifetimeScope _lifetimeScope;
+        private static readonly ILog s_log = LogManager.GetLogger(typeof(PollerAutofacJobFactory));
+        private readonly ILifetimeScope _lifetimeScope;
 
         readonly ConcurrentDictionary<object, JobTrackingInfo> _runningJobs =
             new ConcurrentDictionary<object, JobTrackingInfo>();

@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
+
 using Autofac;
 using Autofac.Extras.Quartz;
+
+
+
 using Quartz;
 using Quartz.Spi;
 using Topshelf;
@@ -9,6 +13,8 @@ using Topshelf.Autofac;
 using Topshelf.HostConfigurators;
 using Topshelf.Quartz;
 using Topshelf.ServiceConfigurators;
+
+using log4net;
 
 namespace AcklenAvenue.Poller
 {
