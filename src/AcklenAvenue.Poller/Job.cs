@@ -1,20 +1,17 @@
 ﻿using System;
-
-using Common.Logging;
-
 using Quartz;
 
 namespace AcklenAvenue.Poller
 {
     public class Job : IJob
     {
-        readonly ILog _log = LogManager.GetLogger(typeof(Job));
-
+        readonly Action<object, Exception> _exceptionLogger;
         readonly ITask _task;
 
-        public Job(ITask task)
+        public Job(ITask task, Action<object, Exception> exceptionLogger)
         {
             _task = task;
+            _exceptionLogger = exceptionLogger;
         }
 
         public void Execute(IJobExecutionContext context)
@@ -25,7 +22,9 @@ namespace AcklenAvenue.Poller
             }
             catch (Exception ex)
             {
-                throw new JobExecutionException("Something awful happened", ex, false);
+                var jobExecutionException = new JobExecutionException("Something awful happened", ex, false);
+                _exceptionLogger(_task, jobExecutionException);
+                throw jobExecutionException;
             }
         }
     }

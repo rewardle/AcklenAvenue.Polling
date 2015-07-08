@@ -1,9 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
 using Autofac;
-
 using Topshelf.HostConfigurators;
 
 namespace AcklenAvenue.Poller
@@ -11,6 +9,10 @@ namespace AcklenAvenue.Poller
     public class PollerBuilder
     {
         const string Default = "Default";
+        Action<object, Exception> _onException = (o, exception) => { };
+        Action<object, string> _onLogInfo = (o, s) => { };
+        Action<object, string> _onLogDebug = (o, s) => { };
+        Action<object, string> _onLogWarning = (o, s) => { };
 
         public PollerBuilder()
         {
@@ -22,17 +24,41 @@ namespace AcklenAvenue.Poller
             ContainerConfiguration = builder => { };
         }
 
-        protected string ServiceDescription { get; set; }
+        protected string ServiceDescription { get; private set; }
 
-        protected string ServiceDisplayName { get; set; }
+        protected string ServiceDisplayName { get; private set; }
 
-        protected string ServiceName { get; set; }
+        protected string ServiceName { get; private set; }
 
-        protected Action<HostConfigurator> OveridedServiceConfiguration { get; set; }
+        protected Action<HostConfigurator> OveridedServiceConfiguration { get; private set; }
 
-        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; set; }
+        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; private set; }
 
-        protected Action<ContainerBuilder> ContainerConfiguration { get; set; }
+        protected Action<ContainerBuilder> ContainerConfiguration { get; private set; }
+
+        public PollerBuilder OnLogException(Action<object, Exception> handler)
+        {
+            _onException = handler;
+            return this;
+        }
+
+        public PollerBuilder OnLogInfo(Action<object, string> handler)
+        {
+            _onLogInfo = handler;
+            return this;
+        }
+
+        public PollerBuilder OnLogWarning(Action<object, string> handler)
+        {
+            _onLogWarning = handler;
+            return this;
+        }
+
+        public PollerBuilder OnLogDebug(Action<object, string> handler)
+        {
+            _onLogDebug = handler;
+            return this;
+        }
 
         public PollerBuilder SetDescription(string serviceDescription)
         {
@@ -64,7 +90,7 @@ namespace AcklenAvenue.Poller
             if (ConcreteTasks.Keys.All(s => s != taskName))
             {
                 ConcreteTasks.Add(
-                    taskName, new TaskAdapter(typeof(TTask), taskName, taskDescription, intervalInSeconds));
+                    taskName, new TaskAdapter(typeof (TTask), taskName, taskDescription, intervalInSeconds));
             }
             else
             {
@@ -87,7 +113,8 @@ namespace AcklenAvenue.Poller
                 OveridedServiceConfiguration,
                 ServiceDescription,
                 ServiceDisplayName,
-                ServiceName);
+                ServiceName, 
+                _onException, _onLogDebug, _onLogInfo, _onLogWarning);
         }
     }
 }

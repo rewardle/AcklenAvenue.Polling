@@ -1,38 +1,42 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
-
 using Autofac;
-
-using Common.Logging;
-
 using Quartz;
 using Quartz.Spi;
 
 namespace AcklenAvenue.Poller
 {
-
     public class PollerAutofacJobFactory : IJobFactory, IDisposable
     {
-        private static readonly ILog s_log = LogManager.GetLogger<PollerAutofacJobFactory>();
-        private readonly ILifetimeScope _lifetimeScope;
+        readonly ILifetimeScope _lifetimeScope;
 
-        private readonly ConcurrentDictionary<object, JobTrackingInfo> _runningJobs =
+        readonly ConcurrentDictionary<object, JobTrackingInfo> _runningJobs =
             new ConcurrentDictionary<object, JobTrackingInfo>();
 
-        private readonly string _scopeName;
+        readonly string _scopeName;
+        readonly Action<object, string> _logDebug;
+        readonly Action<object, string> _logInfo;
+        readonly Action<object, string> _logWarning;
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="PollerAutofacJobFactory" /> class.
         /// </summary>
         /// <param name="lifetimeScope">The lifetime scope.</param>
         /// <param name="scopeName">Name of the scope.</param>
-        public PollerAutofacJobFactory(ILifetimeScope lifetimeScope, string scopeName)
+        /// <param name="logDebug">Log handler for debug information.</param>
+        /// <param name="logInfo">Log handler for info logs.</param>
+        /// <param name="logWarning">Log handler for warning information.</param>
+        public PollerAutofacJobFactory(ILifetimeScope lifetimeScope, string scopeName, Action<object, string> logDebug, Action<object, string> logInfo, Action<object, string> logWarning)
         {
             if (lifetimeScope == null) throw new ArgumentNullException("lifetimeScope");
             if (scopeName == null) throw new ArgumentNullException("scopeName");
             _lifetimeScope = lifetimeScope;
             _scopeName = scopeName;
+            _logDebug = logDebug;
+            _logInfo = logInfo;
+            _logWarning = logWarning;
         }
 
         internal ConcurrentDictionary<object, JobTrackingInfo> RunningJobs
@@ -45,12 +49,12 @@ namespace AcklenAvenue.Poller
         /// </summary>
         public void Dispose()
         {
-            var runningJobs = RunningJobs.ToArray();
+            KeyValuePair<object, JobTrackingInfo>[] runningJobs = RunningJobs.ToArray();
             RunningJobs.Clear();
 
             if (runningJobs.Length > 0)
             {
-                s_log.InfoFormat("Cleaned {0} scopes for running jobs", runningJobs.Length);
+                _logInfo(this, string.Format("Cleaned {0} scopes for running jobs", runningJobs.Length));
             }
         }
 
@@ -81,25 +85,22 @@ namespace AcklenAvenue.Poller
             if (bundle == null) throw new ArgumentNullException("bundle");
             if (scheduler == null) throw new ArgumentNullException("scheduler");
 
-            var jobType = bundle.JobDetail.JobType;
+            Type jobType = bundle.JobDetail.JobType;
 
-            var jobName = bundle.JobDetail.Key.Name;
-            var nestedScope = _lifetimeScope.BeginLifetimeScope(_scopeName);
+            string jobName = bundle.JobDetail.Key.Name;
+            ILifetimeScope nestedScope = _lifetimeScope.BeginLifetimeScope(_scopeName);
 
             IJob newJob = null;
             try
             {
-                
-                newJob = (IJob)nestedScope.ResolveNamed(jobName,jobType);
+                newJob = (IJob) nestedScope.ResolveNamed(jobName, jobType);
                 var jobTrackingInfo = new JobTrackingInfo(nestedScope);
                 RunningJobs[newJob] = jobTrackingInfo;
 
-                if (s_log.IsDebugEnabled)
-                {
-                    s_log.DebugFormat(CultureInfo.InvariantCulture, "Scope 0x{0:x} associated with Job 0x{1:x}",
-                        jobTrackingInfo.Scope.GetHashCode(), newJob.GetHashCode());
-                }
-
+                _logDebug(newJob,
+                    string.Format(CultureInfo.InvariantCulture, "Scope 0x{0:x} associated with Job 0x{1:x}",
+                        jobTrackingInfo.Scope.GetHashCode(), newJob.GetHashCode()));
+                
                 nestedScope = null;
             }
             catch (Exception ex)
@@ -123,20 +124,18 @@ namespace AcklenAvenue.Poller
             JobTrackingInfo trackingInfo;
             if (!RunningJobs.TryRemove(job, out trackingInfo))
             {
-                s_log.WarnFormat("Tracking info for job 0x{0:x} not found", job.GetHashCode());
+                _logWarning(job, string.Format("Tracking info for job 0x{0:x} not found", job.GetHashCode()));
             }
 
             DisposeScope(job, trackingInfo.Scope);
         }
 
-        private static void DisposeScope(IJob job, ILifetimeScope lifetimeScope)
+        void DisposeScope(IJob job, ILifetimeScope lifetimeScope)
         {
-            if (s_log.IsDebugEnabled)
-            {
-                s_log.DebugFormat("Disposing Scope 0x{0:x} for Job 0x{1:x}",
-                    lifetimeScope != null ? lifetimeScope.GetHashCode() : 0,
-                    job != null ? job.GetHashCode() : 0);
-            }
+            _logDebug(job, string.Format("Disposing Scope 0x{0:x} for Job 0x{1:x}",
+                lifetimeScope != null ? lifetimeScope.GetHashCode() : 0,
+                job != null ? job.GetHashCode() : 0));
+   
             if (lifetimeScope != null)
                 lifetimeScope.Dispose();
         }
@@ -158,5 +157,4 @@ namespace AcklenAvenue.Poller
 
         #endregion Job data
     }
-
 }

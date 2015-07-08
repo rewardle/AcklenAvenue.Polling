@@ -1,7 +1,6 @@
-﻿using AcklenAvenue.Poller;
-
+﻿using System;
+using AcklenAvenue.Poller;
 using Autofac;
-
 using Topshelf;
 
 namespace SampleServices
@@ -13,14 +12,18 @@ namespace SampleServices
             var x = new PollerBuilder();
 
             x.SetDescription("Rewardle's Points Commands Service")
-             .SetDisplayName("PointsCommands")
-             .SetServiceName("PointsCommands")
-             .OverideServiceConfiguration(d => d.RunAsLocalService())
-             .RegisterComponents(builder => builder.RegisterType<FakeServie>().As<IFakeService>())
-             .WithTask<ExampleTask>("HOla", "Description", 2)
-             .WithTask<OtherTask>("dd", "Description", 4)
-             .Build()
-             .Start();
+                .SetDisplayName("PointsCommands")
+                .SetServiceName("PointsCommands")
+                .OverideServiceConfiguration(d => d.RunAsLocalService())
+                .RegisterComponents(builder => builder.RegisterType<FakeServie>().As<IFakeService>())
+                .WithTask<ExampleTask>("HOla", "Description", 2)
+                .WithTask<OtherTask>("dd", "Description", 4)
+                .OnLogException((sender, ex) => Console.WriteLine("EXCEPTION: " + ex.Message))
+                .OnLogDebug((sender, message) => Console.WriteLine("DEBUG: " + message))
+                .OnLogInfo((sender, message) => Console.WriteLine("INFO: " + message))
+                .OnLogWarning((sender, message) => Console.WriteLine("WARNING: " + message))
+                .Build()
+                .Start();
         }
     }
 
@@ -43,6 +46,7 @@ namespace SampleServices
 
         public void Execute()
         {
+            throw new Exception("test");
         }
     }
 
