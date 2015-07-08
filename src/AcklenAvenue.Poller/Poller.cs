@@ -17,7 +17,7 @@ namespace AcklenAvenue.Poller
         readonly Dictionary<string, TaskAdapter> _concreteTask;
 
         readonly Action<ContainerBuilder> _containerConfiguration;
-        readonly Action<object, Exception> _onException;
+        readonly Func<object, Exception, Exception> _onException;
         readonly Action<object, string> _onLogDebug;
         readonly Action<object, string> _onLogInfo;
         readonly Action<object, string> _onLogWarning;
@@ -34,7 +34,7 @@ namespace AcklenAvenue.Poller
 
         public Poller(Dictionary<string, TaskAdapter> concreteTask, Action<ContainerBuilder> containerConfiguration,
             Action<HostConfigurator> overidedServiceConfiguration, string serviceDescription, string serviceDisplayName,
-            string serviceName, Action<object, Exception> onException, Action<object, string> onLogInfo,
+            string serviceName, Func<object, Exception, Exception> onException, Action<object, string> onLogInfo,
             Action<object, string> onLogDebug, Action<object, string> onLogWarning)
         {
             _concreteTask = concreteTask;

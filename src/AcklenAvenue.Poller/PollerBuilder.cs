@@ -9,7 +9,7 @@ namespace AcklenAvenue.Poller
     public class PollerBuilder
     {
         const string Default = "Default";
-        Action<object, Exception> _onException = (o, exception) => { };
+        Func<object, Exception, Exception> _onException = (o, exception) => exception;
         Action<object, string> _onLogInfo = (o, s) => { };
         Action<object, string> _onLogDebug = (o, s) => { };
         Action<object, string> _onLogWarning = (o, s) => { };
@@ -36,7 +36,7 @@ namespace AcklenAvenue.Poller
 
         protected Action<ContainerBuilder> ContainerConfiguration { get; private set; }
 
-        public PollerBuilder OnLogException(Action<object, Exception> handler)
+        public PollerBuilder OnException(Func<object, Exception, Exception> handler)
         {
             _onException = handler;
             return this;

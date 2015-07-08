@@ -18,7 +18,11 @@ namespace SampleServices
                 .RegisterComponents(builder => builder.RegisterType<FakeServie>().As<IFakeService>())
                 .WithTask<ExampleTask>("HOla", "Description", 2)
                 .WithTask<OtherTask>("dd", "Description", 4)
-                .OnLogException((sender, ex) => Console.WriteLine("EXCEPTION: " + ex.Message))
+                .OnException((sender, ex) =>
+                             {
+                                 Console.WriteLine("EXCEPTION: " + ex.Message);
+                                 return ex;
+                             })
                 .OnLogDebug((sender, message) => Console.WriteLine("DEBUG: " + message))
                 .OnLogInfo((sender, message) => Console.WriteLine("INFO: " + message))
                 .OnLogWarning((sender, message) => Console.WriteLine("WARNING: " + message))

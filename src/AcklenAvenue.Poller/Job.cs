@@ -5,13 +5,13 @@ namespace AcklenAvenue.Poller
 {
     public class Job : IJob
     {
-        readonly Action<object, Exception> _exceptionLogger;
+        readonly Func<object, Exception, Exception> _exceptionHandler;
         readonly ITask _task;
 
-        public Job(ITask task, Action<object, Exception> exceptionLogger)
+        public Job(ITask task, Func<object, Exception, Exception> exceptionHandler)
         {
             _task = task;
-            _exceptionLogger = exceptionLogger;
+            _exceptionHandler = exceptionHandler;
         }
 
         public void Execute(IJobExecutionContext context)
@@ -22,9 +22,9 @@ namespace AcklenAvenue.Poller
             }
             catch (Exception ex)
             {
-                var jobExecutionException = new JobExecutionException("Something awful happened", ex, false);
-                _exceptionLogger(_task, jobExecutionException);
-                throw jobExecutionException;
+                var handledException = _exceptionHandler(_task, ex);
+                throw new JobExecutionException("Something awful happened", handledException, false);
+                
             }
         }
     }
