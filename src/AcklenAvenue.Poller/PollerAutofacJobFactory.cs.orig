@@ -3,7 +3,10 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
 using Autofac;
+<<<<<<< HEAD
+=======
 
+>>>>>>> removing common loggint
 using Quartz;
 using Quartz.Spi;
 
@@ -13,8 +16,12 @@ namespace AcklenAvenue.Poller
 {
     public class PollerAutofacJobFactory : IJobFactory, IDisposable
     {
+<<<<<<< HEAD
+        readonly ILifetimeScope _lifetimeScope;
+=======
         private static readonly ILog s_log = LogManager.GetLogger(typeof(PollerAutofacJobFactory));
         private readonly ILifetimeScope _lifetimeScope;
+>>>>>>> removing common loggint
 
         readonly ConcurrentDictionary<object, JobTrackingInfo> _runningJobs =
             new ConcurrentDictionary<object, JobTrackingInfo>();
