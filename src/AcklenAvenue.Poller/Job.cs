@@ -22,9 +22,9 @@ namespace AcklenAvenue.Poller
             }
             catch (Exception ex)
             {
+                Console.WriteLine("EXCEPTION IN {2}: {0} - {1}", ex.Message, ex.GetType().Name, context.JobDetail.Key);
                 var handledException = _exceptionHandler(_task, ex);
                 throw new JobExecutionException("Something awful happened", handledException, false);
-                
             }
         }
     }
