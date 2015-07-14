@@ -154,7 +154,7 @@ namespace AcklenAvenue.Poller
                                     this,
                                     new Exception(
                                         string.Format(
-                                            "There was an error in the inicialization of the job: {0}", ex.Message),
+                                            "There was an error in the inicialization of the job: {0}; error message:{1}",task.TaskName, ex.Message),
                                         ex));
                                 throw;
                             }
