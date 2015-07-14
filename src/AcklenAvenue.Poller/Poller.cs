@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+
 using Autofac;
 using Autofac.Extras.Quartz;
+
 using Quartz;
 using Quartz.Spi;
+
 using Topshelf;
 using Topshelf.Autofac;
 using Topshelf.HostConfigurators;
@@ -17,9 +20,13 @@ namespace AcklenAvenue.Poller
         readonly Dictionary<string, TaskAdapter> _concreteTask;
 
         readonly Action<ContainerBuilder> _containerConfiguration;
+
         readonly Func<object, Exception, Exception> _onException;
+
         readonly Action<object, string> _onLogDebug;
+
         readonly Action<object, string> _onLogInfo;
+
         readonly Action<object, string> _onLogWarning;
 
         readonly Action<HostConfigurator> _overidedServiceConfiguration;
@@ -32,10 +39,17 @@ namespace AcklenAvenue.Poller
 
         IContainer _container;
 
-        public Poller(Dictionary<string, TaskAdapter> concreteTask, Action<ContainerBuilder> containerConfiguration,
-            Action<HostConfigurator> overidedServiceConfiguration, string serviceDescription, string serviceDisplayName,
-            string serviceName, Func<object, Exception, Exception> onException, Action<object, string> onLogInfo,
-            Action<object, string> onLogDebug, Action<object, string> onLogWarning)
+        public Poller(
+            Dictionary<string, TaskAdapter> concreteTask,
+            Action<ContainerBuilder> containerConfiguration,
+            Action<HostConfigurator> overidedServiceConfiguration,
+            string serviceDescription,
+            string serviceDisplayName,
+            string serviceName,
+            Func<object, Exception, Exception> onException,
+            Action<object, string> onLogInfo,
+            Action<object, string> onLogDebug,
+            Action<object, string> onLogWarning)
         {
             _concreteTask = concreteTask;
             _containerConfiguration = containerConfiguration;
@@ -54,32 +68,32 @@ namespace AcklenAvenue.Poller
             _container = ConfigureContainer().Build();
             HostFactory.Run(
                 x =>
-                {
-                    x.RunAsLocalService();
+                    {
+                        x.RunAsLocalService();
 
-                    _overidedServiceConfiguration(x);
+                        _overidedServiceConfiguration(x);
 
-                    x.UseAutofacContainer(_container);
-                    x.Service<JobsManager>(
-                        s =>
-                        {
-                            s.ConstructUsingAutofacContainer();
-                            s.WhenStarted(tc => tc.Start());
-                            s.WhenStopped(
-                                tc =>
+                        x.UseAutofacContainer(_container);
+                        x.Service<JobsManager>(
+                            s =>
                                 {
-                                    tc.Stop();
-                                    _container.Dispose();
+                                    s.ConstructUsingAutofacContainer();
+                                    s.WhenStarted(tc => tc.Start());
+                                    s.WhenStopped(
+                                        tc =>
+                                            {
+                                                tc.Stop();
+                                                _container.Dispose();
+                                            });
+
+                                    ConfigureBackgroundJobs(s);
                                 });
 
-                            ConfigureBackgroundJobs(s);
-                        });
-
-                    x.SetDescription(_serviceDescription);
-                    x.SetDisplayName(_serviceDisplayName);
-                    x.SetServiceName(_serviceName);
-                    x.UseLog4Net();
-                });
+                        x.SetDescription(_serviceDescription);
+                        x.SetDisplayName(_serviceDisplayName);
+                        x.SetServiceName(_serviceName);
+                        x.UseLog4Net();
+                    });
         }
 
         public void ConfigureBackgroundJobs(ServiceConfigurator<JobsManager> svc)
@@ -93,16 +107,16 @@ namespace AcklenAvenue.Poller
                 string taskDescription = adapter.TaskDescription;
                 svc.ScheduleQuartzJob(
                     q =>
-                    {
-                        q.WithJob(
-                            JobBuilder.Create<Job>().WithIdentity(name).WithDescription(taskDescription).Build);
-                        q.AddTrigger(
-                            () =>
+                        {
+                            q.WithJob(
+                                JobBuilder.Create<Job>().WithIdentity(name).WithDescription(taskDescription).Build);
+                            q.AddTrigger(
+                                () =>
                                 TriggerBuilder.Create()
-                                    .WithSchedule(
-                                        SimpleScheduleBuilder.RepeatSecondlyForever(adapter.IntervalInSeconds))
-                                    .Build());
-                    });
+                                              .WithSchedule(
+                                                  SimpleScheduleBuilder.RepeatSecondlyForever(adapter.IntervalInSeconds))
+                                              .Build());
+                        });
             }
         }
 
@@ -112,11 +126,11 @@ namespace AcklenAvenue.Poller
             cb.RegisterModule(new QuartzAutofacFactoryModule());
             cb.Register(
                 c =>
-                    new PollerAutofacJobFactory(c.Resolve<ILifetimeScope>(), "Poller.Job", _onLogDebug, _onLogInfo,
-                        _onLogWarning))
-                .AsSelf()
-                .As<IJobFactory>()
-                .SingleInstance();
+                new PollerAutofacJobFactory(
+                    c.Resolve<ILifetimeScope>(), "Poller.Job", _onLogDebug, _onLogInfo, _onLogWarning))
+              .AsSelf()
+              .As<IJobFactory>()
+              .SingleInstance();
 
             _containerConfiguration(cb);
             cb.RegisterType<JobsManager>().AsSelf();
@@ -126,10 +140,25 @@ namespace AcklenAvenue.Poller
 
                 cb.RegisterType(task.Type).Named<ITask>(task.TaskName);
 
-                cb.Register(context => new Job(context.ResolveNamed<ITask>(task.TaskName), _onException))
-                    .Named<Job>(task.TaskName)
-                    .AsSelf()
-                    .InstancePerLifetimeScope();
+                cb.Register(
+                    context =>
+                        {
+                            try
+                            {
+                                var resolveNamed = context.ResolveNamed<ITask>(task.TaskName);
+                                return new Job(resolveNamed, _onException);
+                            }
+                            catch (Exception ex)
+                            {
+                                _onException(
+                                    this,
+                                    new Exception(
+                                        string.Format(
+                                            "There was an error in the inicialization of the job: {0}; error message:{1}",task.TaskName, ex.Message),
+                                        ex));
+                                throw;
+                            }
+                        }).Named<Job>(task.TaskName).AsSelf().InstancePerLifetimeScope();
             }
 
             return cb;

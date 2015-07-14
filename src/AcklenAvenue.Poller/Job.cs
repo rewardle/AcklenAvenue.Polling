@@ -1,5 +1,10 @@
 ﻿using System;
+
+
+
 using Quartz;
+
+using log4net;
 
 namespace AcklenAvenue.Poller
 {
