@@ -15,7 +15,10 @@ namespace SampleServices
                 .SetDisplayName("PointsCommands")
                 .SetServiceName("PointsCommands")
                 .OverideServiceConfiguration(d => d.RunAsLocalService())
-                .RegisterComponents(builder => builder.RegisterType<FakeServie>().As<IFakeService>())
+                .RegisterComponents(builder =>
+                    {
+                        //builder.RegisterType<FakeServie>().As<IFakeService>()
+                    })
                 .WithTask<ExampleTask>("HOla", "Description", 2)
                 .WithTask<OtherTask>("dd", "Description", 4)
                 .OnException((sender, ex) =>
