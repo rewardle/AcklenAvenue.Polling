@@ -78,6 +78,7 @@
     <Compile Include="PollerAutofacJobFactory.cs" />
     <Compile Include="Poller.cs" />
     <Compile Include="PollerBuilder.cs" />
+    <Compile Include="PollerHelper.cs" />
     <Compile Include="PollerState.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="TaskAdapter.cs" />

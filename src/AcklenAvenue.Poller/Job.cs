@@ -8,6 +8,7 @@ using log4net;
 
 namespace AcklenAvenue.Poller
 {
+    [DisallowConcurrentExecution]
     public class Job : IJob
     {
         readonly Func<object, Exception, Exception> _exceptionHandler;
