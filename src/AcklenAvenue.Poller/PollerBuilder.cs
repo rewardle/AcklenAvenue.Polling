@@ -10,8 +10,8 @@ namespace AcklenAvenue.Poller
     {
         const string Default = "Default";
         Func<object, Exception, Exception> _onException = (o, exception) => exception;
-        Action<object, string> _onLogInfo = (o, s) => { };
         Action<object, string> _onLogDebug = (o, s) => { };
+        Action<object, string> _onLogInfo = (o, s) => { };
         Action<object, string> _onLogWarning = (o, s) => { };
 
         public PollerBuilder()
@@ -25,15 +25,10 @@ namespace AcklenAvenue.Poller
         }
 
         protected string ServiceDescription { get; private set; }
-
         protected string ServiceDisplayName { get; private set; }
-
         protected string ServiceName { get; private set; }
-
         protected Action<HostConfigurator> OveridedServiceConfiguration { get; private set; }
-
-        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; private set; }
-
+        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; }
         protected Action<ContainerBuilder> ContainerConfiguration { get; private set; }
 
         public PollerBuilder OnException(Func<object, Exception, Exception> handler)
@@ -113,7 +108,7 @@ namespace AcklenAvenue.Poller
                 OveridedServiceConfiguration,
                 ServiceDescription,
                 ServiceDisplayName,
-                ServiceName, 
+                ServiceName,
                 _onException, _onLogDebug, _onLogInfo, _onLogWarning);
         }
     }

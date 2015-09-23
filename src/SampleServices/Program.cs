@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
 using AcklenAvenue.Poller;
 using Autofac;
 using Topshelf;
@@ -16,11 +18,11 @@ namespace SampleServices
                 .SetServiceName("PointsCommands")
                 .OverideServiceConfiguration(d => d.RunAsLocalService())
                 .RegisterComponents(builder =>
-                    {
-                        //builder.RegisterType<FakeServie>().As<IFakeService>()
-                    })
-                .WithTask<ExampleTask>("HOla", "Description", 2)
-                .WithTask<OtherTask>("dd", "Description", 4)
+                                    {
+                                        builder.RegisterType<FakeServie>().As<IFakeService>();
+                                    })
+                .WithMultipleThreadsPerTask<ExampleTask>("HOla", "Description", 1, 3)
+                //.WithTask<OtherTask>("dd", "Description", 4)
                 .OnException((sender, ex) =>
                              {
                                  Console.WriteLine("EXCEPTION: " + ex.Message);
@@ -53,7 +55,6 @@ namespace SampleServices
 
         public void Execute()
         {
-            throw new Exception("test");
         }
     }
 
@@ -68,6 +69,16 @@ namespace SampleServices
 
         public void Execute()
         {
+            var taskFactory = new TaskFactory();
+            var task = taskFactory.StartNew(() =>
+                                            {
+                                                Console.WriteLine("Start task ");
+
+                                                Thread.Sleep(10000);
+                                                Console.Write("End Task");
+                                            });
+
+            Task.WaitAll(new[] {task});
         }
     }
 }
