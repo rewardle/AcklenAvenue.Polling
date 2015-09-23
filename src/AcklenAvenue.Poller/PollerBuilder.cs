@@ -28,7 +28,7 @@ namespace AcklenAvenue.Poller
         protected string ServiceDisplayName { get; private set; }
         protected string ServiceName { get; private set; }
         protected Action<HostConfigurator> OveridedServiceConfiguration { get; private set; }
-        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; }
+        protected Dictionary<string, TaskAdapter> ConcreteTasks { get; private set; }
         protected Action<ContainerBuilder> ContainerConfiguration { get; private set; }
 
         public PollerBuilder OnException(Func<object, Exception, Exception> handler)
