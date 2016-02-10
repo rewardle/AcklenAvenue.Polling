@@ -105,18 +105,37 @@ namespace AcklenAvenue.Poller
                 string name = taskAdapter.Key;
                 TaskAdapter adapter = taskAdapter.Value;
                 string taskDescription = adapter.TaskDescription;
-                svc.ScheduleQuartzJob(
+                if (adapter.IntervalInSeconds > 0)
+                {
+                    svc.ScheduleQuartzJob(
                     q =>
-                        {
-                            q.WithJob(
-                                JobBuilder.Create<Job>().WithIdentity(name).WithDescription(taskDescription).Build);
-                            q.AddTrigger(
-                                () =>
-                                TriggerBuilder.Create()
-                                              .WithSchedule(
+                    {
+                        q.WithJob(
+                            JobBuilder.Create<Job>().WithIdentity(name).WithDescription(taskDescription).Build);
+                        q.AddTrigger(
+                            () =>
+                            TriggerBuilder.Create()
+                                            .WithSchedule(
                                                   SimpleScheduleBuilder.RepeatSecondlyForever(adapter.IntervalInSeconds))
-                                              .Build());
-                        });
+                                          .Build());
+                    });
+                }
+                else
+                {
+                    svc.ScheduleQuartzJob(
+                    q =>
+                    {
+                        q.WithJob(
+                            JobBuilder.Create<Job>().WithIdentity(name).WithDescription(taskDescription).Build);
+                        q.AddTrigger(
+                            () =>
+                            TriggerBuilder.Create()
+                                          .WithSimpleSchedule(s =>
+                                                s.RepeatForever())
+                                          .Build());
+                    });
+                }
+                
             }
         }
 
