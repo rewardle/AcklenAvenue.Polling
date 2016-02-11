@@ -131,7 +131,9 @@ namespace AcklenAvenue.Poller
                             () =>
                             TriggerBuilder.Create()
                                           .WithSimpleSchedule(s =>
-                                                s.RepeatForever())
+                                                s.RepeatForever()
+                                                .WithInterval(TimeSpan.FromMilliseconds(1)))
+                                          .StartNow()
                                           .Build());
                     });
                 }
